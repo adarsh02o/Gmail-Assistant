@@ -17,7 +17,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.11'
 
     - name: Install dependencies
       run: |
@@ -32,6 +32,15 @@ jobs:
     - name: Create token.pickle from secret
       run: |
         echo "${{ secrets.GMAIL_TOKEN_BASE64 }}" | base64 -d > token.pickle
+
+    - name: Debug Token File (Optional)
+      run: |
+        if [ -s token.pickle ]; then
+          echo "token.pickle created successfully."
+        else
+          echo "Error: token.pickle is empty or missing."
+          exit 1
+        fi
 
     - name: Run Gmail Automator
       run: python gmail_automator.py
