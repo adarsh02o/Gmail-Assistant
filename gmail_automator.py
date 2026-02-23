@@ -114,8 +114,47 @@ def main():
     print("--- Gmail Automator ---")
     report = "📧 *Gmail Automator Report*\n"
 
-    # 1. Fetch and Filter: Find emails with specific keywords (e.g., "urgent" or "important")
+    # --- JOB HUNT MODE ---
+    # 1. Job Application Updates (Interviews, Shortlists, HR Replies)
+    print("\n🔍 Checking for Job Application Updates...")
+    job_queries = [
+        'subject:(interview OR shortlisted OR "next steps" OR scheduled OR "moving forward" OR invitation)', 
+        '("talent acquisition" OR recruiter OR "hiring team") -category:promotions',
+        'subject:(assessment OR test OR exam OR coding OR challenge) (hackerrank OR leetcode OR codility OR glider OR "test link")'
+    ]
+    
+    found_job_emails = []
+    seen_ids = set()
+
+    for q in job_queries:
+        msgs = fetch_emails(service, query=f"{q} is:unread", max_results=5)
+        for m in msgs:
+            if m['id'] not in seen_ids:
+                found_job_emails.append(m)
+                seen_ids.add(m['id'])
+
+    if found_job_emails:
+        report += "\n🚀 *Job Updates (Interviews/Assessments):*\n"
+        print(f"Found {len(found_job_emails)} job-related emails.")
+        for msg in found_job_emails:
+            details = get_email_details(service, msg['id'])
+            if details:
+                # Add an extra "URGENT" tag if it looks like an interview or test
+                prefix = ""
+                subject_lower = details['subject'].lower()
+                if any(x in subject_lower for x in ['test', 'assessment', 'exam', 'hackerrank']):
+                    prefix = "📝 [TEST LINK] "
+                elif any(x in subject_lower for x in ['interview', 'schedule', 'meet']):
+                    prefix = "📅 [INTERVIEW] "
+                
+                report += f" • {prefix}{details['subject']} (from {details['sender']})\n"
+                print(f" - {prefix}{details['subject']}")
+    else:
+        print("No specific job updates found.")
+
+    # 2. General "Important" Filter
     keyword = "important"
+
     print(f"\nSearching for emails with keyword: '{keyword}'...")
     messages = fetch_emails(service, query=keyword, max_results=3)
 
