@@ -10,17 +10,42 @@ A powerful, Python-based automation tool to manage your Gmail inbox efficiently.
 
 ## 🚀 Key Features
 
-*   **🔐 Secure Authentication**: Uses OAuth 2.0 to securely access your Gmail account without storing your password.
-*   **🔍 Smart Keyword Filtering**: Automatically scans for and identifies emails with keywords like "Urgent" or "Important".
-*   **🧹 Inbox Decluttering**: Moves promotional emails to a specific "Promo_Processed" label, keeping your main inbox clean.
-*   **📅 Daily Summaries**: Generates a clear report of unread emails from the last 24 hours.
-*   **📱 Instant Notifications**: Sends a complete action report to your Telegram chat.
+*   **🎯 Aggressive Job Hunt Mode**: Automatically detects **Interviews**, **Shortlisting**, and **Coding Tests** (HackerRank, LeetCode, etc.) and tags them in your notification.
+*   **☁️ 24/7 Cloud Execution**: Runs on **GitHub Actions** for free, even when your computer is off.
+*   **🔐 Secure Authentication**: Uses OAuth 2.0 to securely access your Gmail account.
+*   **🧹 Inbox Decluttering**: Moves promotional emails to a specific "Promo_Processed" label.
+*   **📱 Instant Notifications**: Sends a complete action report to your Telegram chat every morning at 8:00 AM.
 
 ---
 
-## 🛠️ Getting Started
+## 🛠️ Getting Started (The "I'm Job Hunting" Edition)
 
-### Prerequisites
+### 1. Fork & Setup
+1.  **Fork this repo** to your own GitHub account.
+2.  Clone it locally to set up your credentials.
+3.  Run `pip install -r requirements.txt`.
+
+### 2. Generate Secrets
+Run the helper script to generate your secure token:
+```bash
+python get_base64_token.py
+```
+*(Copy the long text it prints)*
+
+### 3. Add Secrets to GitHub
+Go to **Settings** -> **Secrets and variables** -> **Actions** and add:
+*   `GMAIL_TOKEN_BASE64`: (The long text from step 2)
+*   `TELEGRAM_BOT_TOKEN`: (Your bot token)
+*   `TELEGRAM_CHAT_ID`: (Your chat ID)
+
+**That's it!** The bot will now run daily and notify you of any interview updates.
+
+### 4. Customizing Filters
+Open `gmail_automator.py` and scroll to the `Job Hunt Mode` section to add specific keywords for your industry (e.g., "React Developer", "Data Scientist").
+
+---
+
+## 📜 Original Installation
 
 *   **Python 3.8** or higher installed.
 *   A **Google Cloud Project** with the Gmail API enabled.
