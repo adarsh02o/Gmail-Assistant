@@ -1,0 +1,56 @@
+Starting Gmail Automator at Thu Feb 26 08:00:00 AM IST 2026
+--- Gmail Automator ---
+
+🔍 Checking for Job Application Updates...
+Found 14 job-related emails.
+ - Your resume vs shortlisted resumes
+ - 📅 [INTERVIEW] 💼 Weekly Update: Small Interview Change That Leads to Big Wins!
+ - 📅 [INTERVIEW] 2 Jobs posted , 19 feb job interview
+ - 📅 [INTERVIEW] Zoho Recruitment 2026 – Software Developer interview
+ - 📅 [INTERVIEW] Cognizant – Interview Process Update
+ - 8 jobs that you haven't applied yet but others are applying
+ - 💼 Weekly Update: Your Career Snapshot is Ready!
+ - 3 jobs that you haven't applied yet but others are applying
+ - 6 jobs that you haven't applied yet but others are applying
+ - We noticed you haven't submitted your application
+ - 📝 [TEST LINK] IMPORTANT: HEST Scholarship Test Link + Details
+ - 📝 [TEST LINK] IMPORTANT: HEST Scholarship Test Link + Details
+ - 📝 [TEST LINK] HEST Scholarship Test Reminder - Only 1 day to go!
+ - 📝 [TEST LINK] HEST - India's Largest Scholarship Test is just round the corner!
+
+Searching for emails with keyword: 'important'...
+Found 3 emails:
+ - [Fri, 20 Feb 2026 12:11:08 +0000] Innovateloop Solutions <hr@innovateloop.in>: Welcome to Innovateloop Solutions – Backend Developer Internship Program
+ - [Wed, 18 Feb 2026 13:01:09 +0000] Open Source Connect <noreply@luma-mail.com>: Session Today on AI in an AI Data Cloud
+ - [Mon, 16 Feb 2026 11:31:18 +0000] Open Source Connect <noreply@luma-mail.com>: Session Today on Building Your First MVP with Open Source
+
+Processing promotional emails...
+ - Moving 'The 9 Best Job Search Sites & Job Boards of 2026 Based on 1.4 million Applications' to 'Promo_Processed'...
+Moved email 19c9595d2beb27d3 to label ID Label_1
+ - Moving 'Unlock a range of features with our desktop app' to 'Promo_Processed'...
+Moved email 19c94e9e2d3eb012 to label ID Label_1
+
+--- Daily Email Summary (Last 24h) ---
+FROM: Jooble <subscribe@in.jooble.org>
+SUBJ: M365Connect is looking for Legal Intern for Contract Drafting and Legal Activities Internship, Remote and 21 more new jobs
+--
+FROM: Jooble <subscribe@in.jooble.org>
+SUBJ: 🔔 Newton School of Technology is looking for Operations Intern ( Bangalore) - Paid Internship and 18 more new jobs
+--
+FROM: The Huntr Team <hello@huntr.co>
+SUBJ: The 9 Best Job Search Sites & Job Boards of 2026 Based on 1.4 million Applications
+--
+FROM: Discord <noreply@discord.com>
+SUBJ: jexoqe mentioned you in The English Hub
+--
+FROM: Dropbox <no-reply@em-s.dropbox.com>
+SUBJ: Unlock a range of features with our desktop app
+--
+FROM: Jooble <subscribe@in.jooble.org>
+SUBJ: Company is looking for Frontend Developer Intern (Training + Internship Program) and 21 more new jobs
+--
+FROM: Anvi from foundit <jobmessenger@monsterindia.com>
+SUBJ: 8 jobs that you haven't applied yet but others are applying
+--
+Telegram notification sent successfully.
+Gmail Automator finished successfully at Thu Feb 26 08:00:27 AM IST 2026

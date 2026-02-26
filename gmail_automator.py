@@ -12,6 +12,22 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TOKEN_FILE = "token.pickle"
+# Customizable Keywords for filtering promotional emails
+PROMOTION_KEYWORDS = [
+    "sale", 
+    "discount", 
+    "offer 50%", 
+    "subscribe now", 
+    "limited time",
+    "new collection",
+    "exclusive deal",
+    "clearance",
+    "free shipping",
+]
+
+# Senders to ignore in Telegram report
+PROMO_SENDERS = ["info@", "newsletter@", "offers@", "noreply@", "marketing@", "deals@" ,"jobalerts@", "jobmessenger@" , "subscribe@", "promotions@", "ads@", "advertisement@", "promo@", "sales@", "discounts@" ,"aleart@",  "support@" , "no-reply@", "donotreply@", "donotreply@", "noreply@", "do-not-reply@", "do_not_reply@"]
+
 # Telegram Configuration
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -106,6 +122,19 @@ def move_email_to_label(service, msg_id, label_id):
     except Exception as e:
         print(f"Error moving email: {e}")
 
+def trash_email(service, msg_id):
+    """Moves an email to the trash."""
+    try:
+        service.users().messages().trash(userId='me', id=msg_id).execute()
+        print(f"Trashed email {msg_id}")
+    except Exception as e:
+        print(f"Error trashing email: {e}")
+
+def is_ignored_sender(sender):
+    """Checks if the sender matches any of the ignored promo senders."""
+    sender_lower = sender.lower()
+    return any(s in sender_lower for s in PROMO_SENDERS)
+
 def main():
     service = get_service()
     if not service:
@@ -134,11 +163,16 @@ def main():
                 seen_ids.add(m['id'])
 
     if found_job_emails:
-        report += "\n🚀 *Job Updates (Interviews/Assessments):*\n"
+        job_report_section = "\n🚀 *Job Updates (Interviews/Assessments):*\n"
+        added_count = 0
         print(f"Found {len(found_job_emails)} job-related emails.")
         for msg in found_job_emails:
             details = get_email_details(service, msg['id'])
             if details:
+                if is_ignored_sender(details['sender']):
+                    print(f"Skipping sender {details['sender']} in report.")
+                    continue
+
                 # Add an extra "URGENT" tag if it looks like an interview or test
                 prefix = ""
                 subject_lower = details['subject'].lower()
@@ -147,8 +181,12 @@ def main():
                 elif any(x in subject_lower for x in ['interview', 'schedule', 'meet']):
                     prefix = "📅 [INTERVIEW] "
                 
-                report += f" • {prefix}{details['subject']} (from {details['sender']})\n"
+                job_report_section += f" • {prefix}{details['subject']} (from {details['sender']})\n"
                 print(f" - {prefix}{details['subject']}")
+                added_count += 1
+        
+        if added_count > 0:
+            report += job_report_section
     else:
         print("No specific job updates found.")
 
@@ -159,18 +197,55 @@ def main():
     messages = fetch_emails(service, query=keyword, max_results=3)
 
     if messages:
-        report += f"\n🔍 *Found {len(messages)} '{keyword}' emails:*\n"
+        found_important_section = f"\n🔍 *Found {len(messages)} '{keyword}' emails:*\n"
+        added_count = 0
         print(f"Found {len(messages)} emails:")
         for msg in messages:
             details = get_email_details(service, msg['id'])
             if details:
-                report += f" • {details['subject']} (from {details['sender']})\n"
+                if is_ignored_sender(details['sender']):
+                   continue
+
+                found_important_section += f" • {details['subject']} (from {details['sender']})\n"
                 print(f" - [{details['date']}] {details['sender']}: {details['subject']}")
+                added_count += 1
+        
+        if added_count > 0:
+            report += found_important_section
     else:
         report += f"\n🔍 No emails found with keyword '{keyword}'.\n"
         print("No emails found with that keyword.")
 
-    # 2. Sort Promotional Emails: Find 'category:promotions' and move them to a label "Promo_Processed"
+    # 3. Filter by Custom Promotional Keywords and Trash
+    print(f"\nScanning for promotional keywords: {PROMOTION_KEYWORDS}...")
+    
+    keyword_query = " OR ".join([f'"{k}"' for k in PROMOTION_KEYWORDS])
+    promo_keyword_msgs = fetch_emails(service, query=f"({keyword_query}) is:unread", max_results=5)
+
+    if promo_keyword_msgs:
+        promo_label_id = create_label(service, "Promotion")
+        count = 0
+        deleted_section = "\n🗑️ *Trashed Promotional Emails (Keywords):*\n"
+        reported_count = 0
+
+        for msg in promo_keyword_msgs:
+            details = get_email_details(service, msg['id'])
+            if details:
+                print(f" - Processing '{details['subject']}'...")
+                move_email_to_label(service, msg['id'], promo_label_id)
+                trash_email(service, msg['id'])
+                count += 1
+                if not is_ignored_sender(details['sender']):
+                    deleted_section += f" • {details['subject']} (from {details['sender']})\n"
+                    reported_count += 1
+        
+        if reported_count > 0:
+            report += deleted_section
+        print(f"Labeled and trashed {count} emails based on keywords.")
+    else:
+        print("No emails found matching promotional keywords.")
+
+    # 4. Sort Promotional Emails: Find 'category:promotions' and move them to a label "Promo_Processed"
     print("\nProcessing promotional emails...")
     promo_msgs = fetch_emails(service, query="category:promotions is:unread", max_results=2)
     
@@ -188,18 +263,26 @@ def main():
         report += "\n🧹 No new promotional emails to sort.\n"
         print("No new promotional emails to sort.")
 
-    # 3. Daily Summary: List unread emails from the last 24 hours
+    # 5. Daily Summary: List unread emails from the last 24 hours
     print("\n--- Daily Email Summary (Last 24h) ---")
     yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y/%m/%d')
     # search for emails after yesterday
     daily_msgs = fetch_emails(service, query=f"after:{yesterday} is:unread", max_results=10)
     
     if daily_msgs:
-        report += "\n📅 *Daily Summary (Last 24h):*\n"
+        summary_section = "\n📅 *Daily Summary (Last 24h):*\n"
+        added_count = 0
         for msg in daily_msgs:
             details = get_email_details(service, msg['id'])
-            report += f" • {details['subject']} (from {details['sender']})\n"
-            print(f"FROM: {details['sender']}\nSUBJ: {details['subject']}\n--")
+            if details:
+                if is_ignored_sender(details['sender']):
+                   continue
+                summary_section += f" • {details['subject']} (from {details['sender']})\n"
+                print(f"FROM: {details['sender']}\nSUBJ: {details['subject']}\n--")
+                added_count += 1
+        
+        if added_count > 0:
+            report += summary_section
     else:
         report += "\n📅 No new unread emails in the last 24 hours.\n"
         print("No new unread emails in the last 24 hours.")
