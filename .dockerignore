@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+
+# Don't bake secrets into the container!
+credentials.json
+token.pickle
+cron_debug.log

@@ -4,6 +4,7 @@ import base64
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from datetime import datetime, timedelta
+from email.utils import parsedate_to_datetime
 import requests
 import os
 from dotenv import load_dotenv
@@ -135,6 +136,14 @@ def is_ignored_sender(sender):
     sender_lower = sender.lower()
     return any(s in sender_lower for s in PROMO_SENDERS)
 
+def format_date(date_str):
+    """Formats the date string to be more readable."""
+    try:
+        dt = parsedate_to_datetime(date_str)
+        return dt.strftime("%d %b %H:%M") # e.g., 05 Mar 14:30
+    except:
+        return date_str
+
 def main():
     service = get_service()
     if not service:
@@ -143,90 +152,154 @@ def main():
     print("--- Gmail Automator ---")
     report = "📧 *Gmail Automator Report*\n"
 
-    # --- JOB HUNT MODE ---
-    # 1. Job Application Updates (Interviews, Shortlists, HR Replies)
-    print("\n🔍 Checking for Job Application Updates...")
-    job_queries = [
-        'subject:(interview OR shortlisted OR "next steps" OR scheduled OR "moving forward" OR invitation)', 
-        '("talent acquisition" OR recruiter OR "hiring team") -category:promotions',
+    # --- JOB HUNT MODE & HR REPLIES ---
+    # 1. Job Application Updates & HR Replies
+    print("\n🔍 Checking for Job Updates & HR Replies...")
+    
+    # Combined query for job updates and direct HR replies
+    hr_queries = [
+        # Direct replies or specific HR keywords
+        'subject:(re: OR reply) ("interview" OR "schedule" OR "feedback" OR "hiring" OR "application" OR "resume") -category:promotions -category:social',
+        # Standard job update keywords
+        'subject:(interview OR shortlisted OR "next steps" OR scheduled OR "moving forward" OR invitation) -category:promotions',
+        # Assessment/Test keywords
         'subject:(assessment OR test OR exam OR coding OR challenge) (hackerrank OR leetcode OR codility OR glider OR "test link")'
     ]
     
-    found_job_emails = []
+    found_hr_emails = []
     seen_ids = set()
 
-    for q in job_queries:
-        msgs = fetch_emails(service, query=f"{q} is:unread", max_results=5)
+    # Create label for HR Replies
+    hr_label_id = create_label(service, "HR_Replies")
+
+    for q in hr_queries:
+        msgs = fetch_emails(service, query=f"{q} is:unread", max_results=8)
         for m in msgs:
             if m['id'] not in seen_ids:
-                found_job_emails.append(m)
+                found_hr_emails.append(m)
                 seen_ids.add(m['id'])
 
-    if found_job_emails:
-        job_report_section = "\n🚀 *Job Updates (Interviews/Assessments):*\n"
+    if found_hr_emails:
+        job_report_section = "\n💼 *HR Replies & Job Updates:*\n"
         added_count = 0
-        print(f"Found {len(found_job_emails)} job-related emails.")
-        for msg in found_job_emails:
+        seen_senders = set()
+        print(f"Found {len(found_hr_emails)} HR/Job-related emails.")
+        
+        for msg in found_hr_emails:
             details = get_email_details(service, msg['id'])
             if details:
                 if is_ignored_sender(details['sender']):
                     print(f"Skipping sender {details['sender']} in report.")
                     continue
+                
+                # Deduplication: Only one email per sender
+                if details['sender'] in seen_senders:
+                    continue
+                seen_senders.add(details['sender'])
 
-                # Add an extra "URGENT" tag if it looks like an interview or test
+                # Move to HR_Replies label
+                print(f" - Labeling '{details['subject']}' as HR_Reply...")
+                move_email_to_label(service, msg['id'], hr_label_id)
+
+                # Add prefixes for context
                 prefix = ""
                 subject_lower = details['subject'].lower()
+                
                 if any(x in subject_lower for x in ['test', 'assessment', 'exam', 'hackerrank']):
-                    prefix = "📝 [TEST LINK] "
+                    prefix = "📝 [TEST] "
                 elif any(x in subject_lower for x in ['interview', 'schedule', 'meet']):
                     prefix = "📅 [INTERVIEW] "
+                elif "re:" in subject_lower or "reply" in subject_lower:
+                    prefix = "💬 [REPLY] "
                 
-                job_report_section += f" • {prefix}{details['subject']} (from {details['sender']})\n"
+                formatted_date = format_date(details['date'])
+                job_report_section += f" • {prefix}{details['subject']}\n   └ 🕒 {formatted_date} | 👤 {details['sender']}\n"
                 print(f" - {prefix}{details['subject']}")
                 added_count += 1
         
-        if added_count > 0:
+        if added_count != 0:
             report += job_report_section
     else:
-        print("No specific job updates found.")
+        print("No specific HR/Job updates found.")
 
-    # 2. General "Important" Filter
-    keyword = "important"
-
-    print(f"\nSearching for emails with keyword: '{keyword}'...")
-    messages = fetch_emails(service, query=keyword, max_results=3)
+    # 2. General "Very Important" Filter (Offers, Forms, Urgent)
+    print(f"\nSearching for Very Important emails (Offers, Forms, Urgent)...")
+    
+    # Priority keywords - Added generic "offer" to catch variations
+    important_keywords = [
+        # Specific
+        '"offer letter"', '"joining letter"', '"google form"', '"typeform"', '"form link"', 
+        # General
+        'offer', 'urgent', 'verify', 'action', 'alert', 'warning', 'critical', 'important' 
+    ]
+    
+    # Construct query: (keyword1 OR keyword2 ...)
+    # Removing 'is:unread' restriction for VIP - sometimes we miss them if read on another device
+    # Removing '-category:promotions' because sometimes offer letters land in Promotions
+    import_query = f"({' OR '.join(important_keywords)}) is:unread"
+    
+    messages = fetch_emails(service, query=import_query, max_results=15)
 
     if messages:
-        found_important_section = f"\n🔍 *Found {len(messages)} '{keyword}' emails:*\n"
+        # Create label for Very Important
+        vip_label_id = create_label(service, "Very_Important")
+        
+        found_important_section = f"\n🚨 *Very Important / Priority:*\n"
         added_count = 0
-        print(f"Found {len(messages)} emails:")
+        seen_senders = set()
+        print(f"Found {len(messages)} Important emails:")
+        
         for msg in messages:
+            # Skip if we already processed this in HR section (check if ID in seen_ids)
+            if msg['id'] in seen_ids:
+                continue
+
             details = get_email_details(service, msg['id'])
             if details:
                 if is_ignored_sender(details['sender']):
                    continue
 
-                found_important_section += f" • {details['subject']} (from {details['sender']})\n"
-                print(f" - [{details['date']}] {details['sender']}: {details['subject']}")
+                # Deduplication: Only one email per sender
+                if details['sender'] in seen_senders:
+                    continue
+                seen_senders.add(details['sender'])
+
+                # Move to Very_Important label
+                print(f" - Labeling '{details['subject']}' as Very_Important...")
+                move_email_to_label(service, msg['id'], vip_label_id)
+
+                # Add Priority Prefixes
+                prefix = ""
+                subject_lower = details['subject'].lower()
+                if "offer" in subject_lower:
+                    prefix = "🎉 [OFFER] "
+                elif "form" in subject_lower:
+                    prefix = "📄 [FORM] "
+                elif any(x in subject_lower for x in ['urgent', 'critical', 'alert']):
+                    prefix = "🔥 [URGENT] "
+
+                formatted_date = format_date(details['date'])
+                found_important_section += f" • {prefix}{details['subject']}\n   └ 🕒 {formatted_date} | 👤 {details['sender']}\n"
+                print(f" - {prefix}[{details['date']}] {details['sender']}: {details['subject']}")
                 added_count += 1
         
         if added_count > 0:
             report += found_important_section
     else:
-        report += f"\n🔍 No emails found with keyword '{keyword}'.\n"
-        print("No emails found with that keyword.")
+        print("No very important emails found.")
 
     # 3. Filter by Custom Promotional Keywords and Trash
     print(f"\nScanning for promotional keywords: {PROMOTION_KEYWORDS}...")
     
     keyword_query = " OR ".join([f'"{k}"' for k in PROMOTION_KEYWORDS])
-    promo_keyword_msgs = fetch_emails(service, query=f"({keyword_query}) is:unread", max_results=5)
+    promo_keyword_msgs = fetch_emails(service, query=f"({keyword_query}) is:unread", max_results=10)
 
     if promo_keyword_msgs:
         promo_label_id = create_label(service, "Promotion")
         count = 0
         deleted_section = "\n🗑️ *Trashed Promotional Emails (Keywords):*\n"
         reported_count = 0
+        seen_senders = set()
 
         for msg in promo_keyword_msgs:
             details = get_email_details(service, msg['id'])
@@ -235,9 +308,14 @@ def main():
                 move_email_to_label(service, msg['id'], promo_label_id)
                 trash_email(service, msg['id'])
                 count += 1
+                
+                # Report logic with deduplication
                 if not is_ignored_sender(details['sender']):
-                    deleted_section += f" • {details['subject']} (from {details['sender']})\n"
-                    reported_count += 1
+                    if details['sender'] not in seen_senders:
+                        formatted_date = format_date(details['date'])
+                        deleted_section += f" • {details['subject']}\n   └ 🕒 {formatted_date} | 👤 {details['sender']}\n"
+                        seen_senders.add(details['sender'])
+                        reported_count += 1
         
         if reported_count > 0:
             report += deleted_section
@@ -247,7 +325,7 @@ def main():
 
     # 4. Sort Promotional Emails: Find 'category:promotions' and move them to a label "Promo_Processed"
     print("\nProcessing promotional emails...")
-    promo_msgs = fetch_emails(service, query="category:promotions is:unread", max_results=2)
+    promo_msgs = fetch_emails(service, query="category:promotions is:unread", max_results=5)
     
     if promo_msgs:
         promo_label_id = create_label(service, "Promo_Processed")
@@ -267,17 +345,26 @@ def main():
     print("\n--- Daily Email Summary (Last 24h) ---")
     yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y/%m/%d')
     # search for emails after yesterday
-    daily_msgs = fetch_emails(service, query=f"after:{yesterday} is:unread", max_results=10)
+    daily_msgs = fetch_emails(service, query=f"after:{yesterday} is:unread", max_results=15)
     
     if daily_msgs:
         summary_section = "\n📅 *Daily Summary (Last 24h):*\n"
         added_count = 0
+        seen_senders = set()
+        
         for msg in daily_msgs:
             details = get_email_details(service, msg['id'])
             if details:
                 if is_ignored_sender(details['sender']):
                    continue
-                summary_section += f" • {details['subject']} (from {details['sender']})\n"
+                
+                # Deduplication
+                if details['sender'] in seen_senders:
+                    continue
+                seen_senders.add(details['sender'])
+
+                formatted_date = format_date(details['date'])
+                summary_section += f" • {details['subject']}\n   └ 🕒 {formatted_date} | 👤 {details['sender']}\n"
                 print(f"FROM: {details['sender']}\nSUBJ: {details['subject']}\n--")
                 added_count += 1
         
